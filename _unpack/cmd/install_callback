@@ -1,0 +1,28 @@
+#!/bin/bash
+# 安装后：生成口令配置
+# 注意: 升级时若已存在口令配置则保留原口令, 防止覆盖用户自定义口令导致无法登录
+PY="$(command -v python3 || echo /usr/bin/python3)"
+if [ -f "${TRIM_PKGVAR}/config.json" ] && grep -q 'pass_sha256' "${TRIM_PKGVAR}/config.json" 2>/dev/null; then
+    exit 0
+fi
+PASS="${wizard_dm_password:-${dm_password:-}}"
+if [ -z "$PASS" ]; then
+    echo "未收到访问口令，应用将无法登录！请卸载后重新安装。" > "${TRIM_TEMP_LOGFILE}"
+    exit 1
+fi
+"$PY" - "$TRIM_PKGVAR" "$PASS" <<'EOF'
+import hashlib, json, os, secrets, sys
+var, pw = sys.argv[1], sys.argv[2]
+salt = secrets.token_hex(16)
+h = hashlib.sha256((salt + pw).encode()).hexdigest()
+cfg = {"pass_salt": salt, "pass_sha256": h}
+os.makedirs(var, exist_ok=True)
+with open(os.path.join(var, "config.json"), "w") as f:
+    json.dump(cfg, f)
+os.chmod(os.path.join(var, "config.json"), 0o600)
+EOF
+if [ $? -ne 0 ]; then
+    echo "口令配置写入失败" > "${TRIM_TEMP_LOGFILE}"
+    exit 1
+fi
+exit 0

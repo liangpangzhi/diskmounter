@@ -1,0 +1,55 @@
+#!/bin/bash
+# 磁盘挂载管家 - 启停与状态检查
+APP_DIR="${TRIM_APPDEST}"
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+LOG_FILE="${TRIM_PKGVAR}/backend.log"
+PY="$(command -v python3 || echo /usr/bin/python3)"
+
+is_running() {
+    [ -f "$PID_FILE" ] || return 1
+    local pid
+    pid=$(tr -d '[:space:]' < "$PID_FILE")
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+case "$1" in
+start)
+    if is_running; then
+        exit 0
+    fi
+    rm -f "$PID_FILE"
+    nohup "$PY" "${APP_DIR}/bin/diskm.py" >> "$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+    sleep 2
+    if ! is_running; then
+        echo "后端服务启动失败，请查看 $LOG_FILE" > "${TRIM_TEMP_LOGFILE}"
+        exit 1
+    fi
+    exit 0
+    ;;
+stop)
+    if [ -f "$PID_FILE" ]; then
+        pid=$(tr -d '[:space:]' < "$PID_FILE")
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null
+            for _ in 1 2 3 4 5 6 7 8 9 10; do
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 1
+            done
+            kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
+        fi
+        rm -f "$PID_FILE"
+    fi
+    exit 0
+    ;;
+status)
+    if is_running; then
+        exit 0
+    fi
+    rm -f "$PID_FILE"
+    exit 3
+    ;;
+*)
+    exit 1
+    ;;
+esac

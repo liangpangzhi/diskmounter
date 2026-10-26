@@ -1,0 +1,7 @@
+#!/bin/bash
+# 卸载后清理: 清除 mdadm 开机抑制列表, 让所有硬盘恢复正常自动组装
+PY="$(command -v python3 || echo /usr/bin/python3)"
+if [ -f "${TRIM_APPDEST}/bin/diskm.py" ]; then
+    "$PY" "${TRIM_APPDEST}/bin/diskm.py" clear-ignore >> "${TRIM_PKGVAR}/ops.log" 2>&1 || true
+fi
+exit 0

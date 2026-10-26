@@ -1,0 +1,7 @@
+#!/bin/bash
+# 卸载前：若仍有被本应用卸载的存储池，先恢复挂载，避免系统状态不一致
+PY="$(command -v python3 || echo /usr/bin/python3)"
+if [ -f "${TRIM_APPDEST}/bin/diskm.py" ]; then
+    "$PY" "${TRIM_APPDEST}/bin/diskm.py" restore-all >> "${TRIM_PKGVAR}/ops.log" 2>&1 || true
+fi
+exit 0

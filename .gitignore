@@ -1,0 +1,12 @@
+# 临时构建产物
+_fpk_tmp/
+_stage/
+__pycache__/
+*.pyc
+
+# 一次性重启/临时脚本
+_restart.sh
+
+# 不应入库的本地凭据（如存在）
+*.local
+.env

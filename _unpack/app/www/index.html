@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>磁盘挂载管家</title>
+<style>
+:root{
+  --bg:#f4f6f9; --card:#ffffff; --line:#e4e8ee; --txt:#243244; --sub:#68788f;
+  --blue:#2f6fed; --green:#18a058; --red:#d93a3a; --orange:#e8830c;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+header img{width:40px;height:40px}
+h1{font-size:20px;font-weight:600}
+.sub{color:var(--sub);font-size:13px;margin-bottom:22px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button{border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;transition:.15s}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-outline{background:#fff;border:1px solid var(--line);color:var(--txt)}
+.btn-outline:hover{border-color:var(--blue);color:var(--blue)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:0 1px 3px rgba(20,40,80,.04)}
+.card h3{font-size:16px;display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.badge{font-size:11px;padding:2px 8px;border-radius:10px;color:#fff;font-weight:500}
+.b-mounted{background:var(--green)} .b-stopped{background:#98a2b3} .b-unmounted{background:var(--orange)} .b-pending{background:var(--blue)}
+.b-system{background:#7a869a} .b-pool{background:var(--blue)} .b-safe{background:var(--green)} .b-exported{background:#e67e22}
+.meta{color:var(--sub);font-size:12.5px;line-height:1.9}
+.meta b{color:var(--txt);font-weight:500}
+.bar{height:6px;background:#eef1f5;border-radius:3px;margin:10px 0 4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue);border-radius:3px}
+.bar i.warn{background:var(--orange)} .bar i.full{background:var(--red)}
+.usage-txt{font-size:12px;color:var(--sub)}
+.acts{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.desired-note{font-size:12px;color:var(--blue);margin-top:8px}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:40px;text-align:center;color:var(--sub)}
+/* tabs */
+.tabs{display:flex;gap:8px;margin-bottom:18px}
+.tab{border:1px solid var(--line);background:#fff;color:var(--sub);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px}
+.tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.disk-warn{background:#fff7ec;border:1px solid #ffe3bd;color:#8a5300;padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:13px;display:none}
+/* modal */
+.mask{position:fixed;inset:0;background:rgba(15,25,40,.45);display:none;align-items:center;justify-content:center;z-index:50}
+.mask.show{display:flex}
+.modal{background:#fff;border-radius:14px;padding:24px;width:480px;max-width:92vw;max-height:85vh;overflow:auto}
+.modal h3{margin-bottom:12px;font-size:17px}
+.modal p{font-size:13.5px;line-height:1.8;color:var(--txt)}
+.modal .warn{background:#fff7ec;border:1px solid #ffe3bd;color:#8a5300;padding:10px 12px;border-radius:8px;margin:12px 0;font-size:13px;line-height:1.7}
+.modal input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:14px;margin-top:10px}
+.modal input:focus{outline:none;border-color:var(--blue)}
+.macts{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.blocker{background:#fbfbfc;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;margin-top:6px;font-family:Consolas,monospace}
+/* login */
+.login-mask{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:100}
+.login-box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:34px;width:360px;max-width:90vw;text-align:center}
+.login-box img{width:56px;height:56px;margin-bottom:10px}
+.login-box h2{font-size:18px;margin-bottom:18px}
+.login-box input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px;text-align:center}
+.login-err{color:var(--red);font-size:13px;margin-bottom:10px;min-height:18px}
+/* log */
+#logBox{background:#101724;color:#cfe3ff;font:12px/1.7 Consolas,monospace;border-radius:10px;padding:14px;max-height:320px;overflow:auto;white-space:pre-wrap}
+.ferr{color:var(--red);font-size:13px;margin:10px 0;white-space:pre-wrap}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:r .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes r{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="login-mask" id="loginMask" style="display:none">
+  <div class="login-box">
+    <img src="/favicon.svg" onerror="this.style.display='none'">
+    <h2>磁盘挂载管家</h2>
+    <div class="login-err" id="loginErr"></div>
+    <input type="password" id="pw" placeholder="请输入访问口令" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-primary" style="width:100%" onclick="doLogin()">登 录</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header>
+    <h1>磁盘挂载管家</h1>
+  </header>
+  <div class="tabs">
+    <button class="tab active" id="tab-pool" onclick="switchTab('pool')">存储池管理</button>
+    <button class="tab" id="tab-disk" onclick="switchTab('disk')">硬盘停转</button>
+  </div>
+
+  <!-- ============ 存储池管理 ============ -->
+  <div id="poolView">
+    <div class="sub">
+      <span>安全挂载 / 卸载系统盘以外的存储池 · 状态在重启后自动保持</span>
+      <span class="toolbar">
+        <button class="btn-outline" onclick="askMountAll()">⟳ 全部恢复挂载</button>
+        <button class="btn-outline" onclick="showLog()">操作日志</button>
+        <button class="btn-outline" onclick="doLogout()">退出</button>
+      </span>
+    </div>
+    <div class="ferr" id="gerr"></div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none">未发现可管理的存储池</div>
+  </div>
+
+  <!-- ============ 硬盘停转 ============ -->
+  <div id="diskView" style="display:none">
+    <div class="sub">
+      <span>扫描并安全停转空闲硬盘 · 系统盘与活跃存储池强制保护</span>
+      <span class="toolbar">
+        <button class="btn-outline" onclick="scanDisks()">⟳ 扫描硬盘</button>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--sub);cursor:pointer">
+          <input type="checkbox" id="autoChk" onchange="toggleAuto(this)"> 卸载后自动停转
+        </label>
+        <button class="btn-outline" onclick="showLog()">操作日志</button>
+        <button class="btn-outline" onclick="doLogout()">退出</button>
+      </span>
+    </div>
+    <div class="disk-warn" id="diskWarn">⚠️ 未检测到 <b>hdparm</b> 命令，无法查询/停转硬盘电源状态。请在飞牛上安装 hdparm（或确认其位于 PATH）后重试。</div>
+    <div class="ferr" id="gerr2"></div>
+    <div class="grid" id="diskGrid"></div>
+    <div class="empty" id="diskEmpty" style="display:none">未发现可管理的硬盘</div>
+  </div>
+</div>
+
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+
+<script>
+let pools=[], timer=null;
+let disks=[], diskTimer=null;
+
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{}));
+  if(r.status===401){showLogin();throw new Error('unauthorized')}
+  return r.json();
+}
+
+function showLogin(){
+  document.getElementById('loginMask').style.display='flex';
+  if(timer){clearInterval(timer);timer=null}
+  if(diskTimer){clearInterval(diskTimer);diskTimer=null}
+}
+function hideLogin(){document.getElementById('loginMask').style.display='none'}
+
+async function doLogin(){
+  const pw=document.getElementById('pw').value;
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+  if(r.ok){document.getElementById('loginErr').textContent='';hideLogin();refresh();startTimer()}
+  else document.getElementById('loginErr').textContent='口令错误';
+}
+async function doLogout(){await api('/api/logout',{method:'POST'});showLogin()}
+
+const badge=(s)=> s==='mounted'?'<span class="badge b-mounted">已挂载</span>'
+  : s==='stopped'?'<span class="badge b-stopped">已停止(阵列离线)</span>'
+  : '<span class="badge b-unmounted">已安全卸载</span>';
+
+function render(){
+  const g=document.getElementById('grid');
+  g.innerHTML='';
+  document.getElementById('empty').style.display=pools.length?'none':'block';
+  pools.forEach(p=>{
+    const d=document.createElement('div');d.className='card';
+    let usageHtml='';
+    if(p.usage){
+      const pct=p.usage.pct||0;
+      const cls=pct>=90?'full':pct>=75?'warn':'';
+      usageHtml=`<div class="bar"><i class="${cls}" style="width:${Math.min(pct,100)}%"></i></div>
+      <div class="usage-txt">已用 ${fmt(p.usage.used)} / ${fmt(p.usage.total)} (${pct}%)</div>`;
+    } else usageHtml='<div class="usage-txt" style="margin-top:8px">未挂载，无用量数据</div>';
+    const disks=(p.member_disks||[]).map(d=>`${d} (${fmt(p.disk_sizes[d])})`).join('、');
+    let acts='';
+    if(p.current==='mounted'){
+      acts=`<button class="btn btn-danger" onclick="askUnmount('${p.name}')">安全卸载</button>`;
+    }else{
+      acts=`<button class="btn btn-primary" onclick="doMount('${p.name}',this)">恢复挂载</button>`;
+    }
+    const pend = p.current!==p.desired ? `<div class="desired-note">期望状态: ${p.desired==='mounted'?'挂载':'卸载'} · 重启后自动保持</div>`:'';
+    d.innerHTML=`
+      <h3>${esc(p.name)} ${badge(p.current)} <span class="badge" style="background:#5b6b83">${p.type==='zfs'?'ZFS':'LVM'}</span></h3>
+      <div class="meta">
+        文件系统: <b>${esc(p.fs||'—')}</b> 　挂载点: <b>${esc(p.mnt||'—')}</b><br>
+        设备: <b>${esc(p.dev||p.md||p.pool||'—')}</b>${p.vg?` 　卷组: <b>${esc(p.vg)}</b>`:''}<br>
+        成员硬盘: <b>${esc(disks||'—')}</b>
+      </div>
+      ${usageHtml}${pend}
+      <div class="acts">${acts}</div>`;
+    g.appendChild(d);
+  });
+}
+
+function fmt(n){if(n==null)return '-';const u=['B','KB','MB','GB','TB','PB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return n.toFixed(1)+u[i]}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function askUnmount(name){
+  const p=pools.find(x=>x.name===name);if(!p)return;
+  modal(`
+    <h3>安全卸载 ${esc(name)}</h3>
+    <p>将按以下流程安全卸载（不影响数据）：</p>
+    <p style="color:var(--sub)">1. 检查并拒绝存在占用的进程<br>2. sync 刷写缓存<br>3. 卸载文件系统<br>4. 停用卷组与 RAID 阵列${p.type==='zfs'?'（ZFS 为导出存储池）':''}，硬盘完全静默并停转</p>
+    <div class="warn">请确认没有应用（下载、Docker 容器、影音库等）正在读写 <b>${esc(p.mnt||name)}</b>。<br>卸载后共享文件夹、媒体库将暂不可访问，重启后仍保持卸载状态；成员硬盘随后会自动停转省电。</div>
+    <p>请输入存储池名称 <b>${esc(name)}</b> 以确认：</p>
+    <input id="confirmName" placeholder="${esc(name)}" onkeydown="if(event.key==='Enter')submitUnmount('${esc(name)}')">
+    <div style="margin-top:12px;border:1px solid #ffd7d7;background:#fff5f5;border-radius:8px;padding:10px 12px">
+      <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:13px;color:var(--red)">
+        <input type="checkbox" id="forceChk" style="margin-top:3px">
+        <span><b>强制卸载</b>：若仍有进程占用（如共享服务 share_service、文件服务等），自动停止这些进程后再卸载，并在卸载完成后自动重启它们。<br>
+        ⚠️ 强制停止可能中断正在进行的文件读写/传输，存在极小概率的数据不一致风险。systemd 服务会通过 systemctl 优雅停止，卸载完成后自动恢复。</span>
+      </label>
+    </div>
+    <div class="ferr" id="merr"></div>
+    <div class="macts">
+      <button class="btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-danger" id="confirmBtn" onclick="submitUnmount('${esc(name)}')">确认安全卸载</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('confirmName').focus(),50);
+}
+
+async function submitUnmount(name, force){
+  const v=document.getElementById('confirmName').value.trim();
+  if(v!==name){document.getElementById('merr').textContent='输入的名称不匹配';return}
+  const chk=document.getElementById('forceChk');
+  const useForce=force===true||(chk&&chk.checked);
+  const btn=document.getElementById('confirmBtn');btn.disabled=true;btn.innerHTML='<span class="spin"></span>'+(useForce?'正在强制安全卸载…':'正在安全卸载…');
+  try{
+    const r=await api('/api/unmount',{method:'POST',body:JSON.stringify({name:name,force:useForce})});
+    if(r.ok){closeModal();await refresh();toast(r.message)}
+    else{
+      const errBox=document.getElementById('merr');
+      errBox.textContent=r.message||r.error||'操作失败';
+      btn.disabled=false;btn.textContent='确认安全卸载';
+      if((r.message||'').includes('占用')){
+        const lines=(r.message||'').split('\n').slice(1).map(l=>`<div class="blocker">${esc(l)}</div>`).join('');
+        errBox.innerHTML='存在占用进程，请先停止以下进程：'+lines+
+          `<div style="margin-top:8px"><button class="btn btn-danger" onclick="submitUnmount('${esc(name)}',true)">⚡ 强制停止占用进程并卸载</button></div>`;
+      }
+    }
+  }catch(e){}
+}
+
+async function doMount(name,btn){
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span>正在恢复挂载…';
+  try{
+    const r=await api('/api/mount',{method:'POST',body:JSON.stringify({name})});
+    await refresh();
+    if(!r.ok) document.getElementById('gerr').textContent=r.message||r.error||'挂载失败';
+  }catch(e){}
+}
+
+function askMountAll(){
+  const unmounted=pools.filter(p=>p.current!=='mounted');
+  const list=unmounted.length?unmounted.map(p=>p.name).join('、'):'（当前全部已挂载）';
+  modal(`
+    <h3>全部恢复挂载</h3>
+    <p>将把所有当前未挂载的存储池恢复挂载（自动组装 RAID 阵列、激活卷组，ZFS 池执行 import），并把它们的期望状态改为"挂载"。</p>
+    <div class="meta" style="margin:8px 0">待恢复：<b>${esc(list)}</b></div>
+    <div class="ferr" id="merr"></div>
+    <div class="macts">
+      <button class="btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" id="confirmBtn" onclick="submitMountAll()">确认全部恢复挂载</button>
+    </div>`);
+}
+
+async function submitMountAll(){
+  const btn=document.getElementById('confirmBtn');btn.disabled=true;btn.innerHTML='<span class="spin"></span>正在恢复挂载…';
+  try{
+    const r=await api('/api/mount-all',{method:'POST',body:'{}'});
+    closeModal();await refresh();
+    if(r.ok) toast(r.message||'全部恢复挂载完成');
+    else document.getElementById('gerr').textContent=r.message||r.error||'部分池恢复失败，请查看操作日志';
+  }catch(e){}
+}
+
+function showLog(){
+  api('/api/log').then(r=>{
+    modal(`<h3>操作日志</h3><div id="logBox">${esc(r.log||'(空)')}</div>
+    <div class="macts"><button class="btn-outline" onclick="closeModal()">关闭</button></div>`);
+  });
+}
+
+function toast(msg){
+  modal(`<h3>操作完成</h3><p>${esc(msg)}</p><div class="macts"><button class="btn-primary" onclick="closeModal()">好的</button></div>`);
+}
+function modal(html){document.getElementById('modal').innerHTML=html;document.getElementById('mask').classList.add('show')}
+function closeModal(){document.getElementById('mask').classList.remove('show')}
+document.getElementById('mask').addEventListener('click',e=>{if(e.target.id==='mask')closeModal()});
+
+// ---------------------------------------------------------------- 选项卡
+function switchTab(tab){
+  document.getElementById('poolView').style.display = tab==='pool'?'block':'none';
+  document.getElementById('diskView').style.display = tab==='disk'?'block':'none';
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='disk'){
+    if(timer){clearInterval(timer);timer=null}
+    scanDisks();
+    if(!diskTimer) diskTimer=setInterval(scanDisks,8000);
+  }else{
+    if(diskTimer){clearInterval(diskTimer);diskTimer=null}
+    refresh();
+    if(!timer) timer=setInterval(refresh,5000);
+  }
+}
+
+// ---------------------------------------------------------------- 硬盘停转
+async function scanDisks(){
+  try{
+    const r=await api('/api/disks');
+    disks=r.disks||[];
+    const ac=document.getElementById('autoChk');
+    if(ac) ac.checked=!!r.auto_spindown;
+    const dw=document.getElementById('diskWarn');
+    if(dw) dw.style.display = (r.hdparm_ok===false)?'block':'none';
+    document.getElementById('gerr2').textContent='';
+    renderDisks();
+  }catch(e){}
+}
+
+function renderDisks(){
+  const g=document.getElementById('diskGrid');
+  g.innerHTML='';
+  document.getElementById('diskEmpty').style.display=disks.length?'none':'block';
+  disks.forEach(d=>{
+    const el=document.createElement('div');el.className='card';
+    const size=fmt(d.size);
+    const powerIcon = d.power==='standby'?'💤':d.power==='active'?'🟢':d.power==='idle'?'🟡':'❓';
+    const powerTxt = {active:'运转中',idle:'空闲(未停转)',standby:'已停转(静默)',unknown:'状态未知'}[d.power]||'状态未知';
+    let badgeHtml, note, acts='';
+    if(d.class==='system'){
+      badgeHtml='<span class="badge b-system">系统盘·受保护</span>';
+      note='操作系统/启动盘所在，严禁停转（保护系统）。';
+    }else if(d.class==='pool_active'){
+      badgeHtml='<span class="badge b-pool">存储池中·活跃</span>';
+      note=(d.pool?('属于活跃存储池 <b>'+esc(d.pool)+'</b>。'):'')+'停转会导致存储池降级甚至损坏数据，已禁用。如需停转请先到『存储池管理』安全卸载该池。';
+    }else if(d.class==='mounted'){
+      badgeHtml='<span class="badge b-mounted">已挂载·使用中</span>';
+      note='当前正在被使用，禁止停转。请先到『存储池管理』安全卸载所属存储池。';
+    }else if(d.class==='pool_exported'){
+      badgeHtml='<span class="badge b-exported">已导出ZFS池·会被唤醒</span>';
+      note='该盘属于一个<b>已导出(未删除)</b>的 ZFS 存储池，飞牛 zfs-zed 守护进程会持续尝试 <code>zpool import</code> 导入并唤醒它，因此停转后可能很快被重新唤醒（并非停转指令无效）。如需长期保持静默停转，请在飞牛『存储管理』中删除该 ZFS 存储池。停转本身安全、不伤数据，仍可执行。';
+      if(d.power==='standby'){
+        acts=`<button class="btn btn-primary" onclick="doResume('${d.name}')">恢复使用 / 唤醒</button>`;
+      }else{
+        acts=`<button class="btn btn-danger" onclick="askSpindown('${d.name}')">停转硬盘</button>`+
+             `<button class="btn btn-outline" onclick="doSpinup('${d.name}',this)">唤醒</button>`;
+      }
+    }else{
+      badgeHtml='<span class="badge b-safe">可停转·空闲</span>';
+      note='空闲且不属于任何活跃存储池，可安全停转。访问时会自动唤醒。';
+      if(d.power==='standby'){
+        acts=`<button class="btn btn-primary" onclick="doResume('${d.name}')">恢复使用 / 唤醒</button>`;
+      }else{
+        acts=`<button class="btn btn-danger" onclick="askSpindown('${d.name}')">停转硬盘</button>`+
+             `<button class="btn btn-outline" onclick="doSpinup('${d.name}',this)">唤醒</button>`;
+      }
+    }
+    el.innerHTML=`
+      <h3>${esc(d.name)} ${badgeHtml}</h3>
+      <div class="meta">
+        型号: <b>${esc(d.model||'—')}</b> 　容量: <b>${esc(size)}</b><br>
+        电源状态: <b>${powerIcon} ${esc(powerTxt)}</b>
+      </div>
+      <div class="meta" style="margin-top:6px;color:var(--sub)">${note}</div>
+      <div class="acts">${acts}</div>`;
+    g.appendChild(el);
+  });
+}
+
+function askSpindown(disk){
+  modal(`
+    <h3>停转硬盘 ${esc(disk)}</h3>
+    <p>将向硬盘发送停转(待机)指令：</p>
+    <p style="color:var(--sub)">硬盘将在数秒内停止旋转、进入静默省电状态。<br>该操作不删除/不修改任何数据；当系统或应用再次访问该盘时，硬盘会自动自旋启动（约数秒~十余秒，首次访问会稍慢）。</p>
+    <div class="warn">⚠️ 仅可对『空闲且不属于任何活跃存储池』的硬盘执行。本应用已自动屏蔽系统盘与活跃存储池盘。频繁启停可能略微增加机械损耗，请按需使用。</div>
+    <p>请输入硬盘名称 <b>${esc(disk)}</b> 以确认：</p>
+    <input id="confirmDisk" placeholder="${esc(disk)}" onkeydown="if(event.key==='Enter')submitSpindown('${esc(disk)}')">
+    <div class="ferr" id="merr"></div>
+    <div class="macts">
+      <button class="btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-danger" id="confirmBtn" onclick="submitSpindown('${esc(disk)}')">确认停转</button>
+    </div>`);
+  setTimeout(()=>{const e=document.getElementById('confirmDisk'); if(e)e.focus()},50);
+}
+
+async function submitSpindown(disk){
+  const v=document.getElementById('confirmDisk').value.trim();
+  if(v!==disk){document.getElementById('merr').textContent='输入的名称不匹配';return}
+  const btn=document.getElementById('confirmBtn');btn.disabled=true;btn.innerHTML='<span class="spin"></span>正在停转…';
+  try{
+    const r=await api('/api/disk/spindown',{method:'POST',body:JSON.stringify({disk})});
+    if(r.ok){closeModal();await scanDisks();toast(r.message)}
+    else{document.getElementById('merr').textContent=r.message||r.error||'操作失败';btn.disabled=false;btn.textContent='确认停转'}
+  }catch(e){}
+}
+
+async function doSpinup(disk,btn){
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>唤醒中…'}
+  try{
+    const r=await api('/api/disk/spinup',{method:'POST',body:JSON.stringify({disk})});
+    await scanDisks();
+    if(!r.ok) document.getElementById('gerr2').textContent=r.message||r.error||'唤醒失败';
+    else toast(r.message);
+  }catch(e){}
+}
+
+function doResume(disk){
+  modal(`<h3>恢复使用 ${esc(disk)}</h3>
+    <p>将先唤醒硬盘，再尝试重新挂载其所属存储池（自动组装阵列 / 激活卷组 / ZFS 导入）。</p>
+    <div class="ferr" id="merr"></div>
+    <div class="macts">
+      <button class="btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" id="confirmBtn" onclick="submitResume('${esc(disk)}')">确认恢复使用</button>
+    </div>`);
+}
+
+async function submitResume(disk){
+  const btn=document.getElementById('confirmBtn');btn.disabled=true;btn.innerHTML='<span class="spin"></span>正在恢复…';
+  try{
+    const r=await api('/api/disk/resume',{method:'POST',body:JSON.stringify({disk})});
+    closeModal();await scanDisks();
+    if(r.ok) toast(r.message||'已恢复使用');
+    else document.getElementById('gerr2').textContent=r.message||r.error||'恢复失败';
+  }catch(e){}
+}
+
+async function toggleAuto(chk){
+  const v=chk.checked;
+  const r=await api('/api/setting',{method:'POST',body:JSON.stringify({key:'auto_spindown',value:v})});
+  if(!r.ok){chk.checked=!v;document.getElementById('gerr2').textContent='设置失败';}
+}
+
+// ---------------------------------------------------------------- 刷新
+async function refresh(){
+  try{
+    const r=await api('/api/pools');
+    pools=r.pools||[];
+    document.getElementById('gerr').textContent='';
+    render();
+    hideLogin();
+  }catch(e){}
+}
+function startTimer(){if(!timer)timer=setInterval(refresh,5000)}
+
+(async function init(){
+  try{
+    const r=await api('/api/pools');
+    pools=r.pools||[];render();startTimer();
+  }catch(e){/* 未登录 */}
+})();
+</script>
+</body>
+</html>
