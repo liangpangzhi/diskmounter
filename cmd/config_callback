@@ -1,0 +1,18 @@
+#!/bin/bash
+# 配置后：若向导提供了新口令则更新
+PY="$(command -v python3 || echo /usr/bin/python3)"
+PASS="${wizard_dm_password:-${dm_password:-}}"
+if [ -n "$PASS" ]; then
+    "$PY" - "$TRIM_PKGVAR" "$PASS" <<'EOF'
+import hashlib, json, os, secrets, sys
+var, pw = sys.argv[1], sys.argv[2]
+salt = secrets.token_hex(16)
+h = hashlib.sha256((salt + pw).encode()).hexdigest()
+cfg = {"pass_salt": salt, "pass_sha256": h}
+os.makedirs(var, exist_ok=True)
+with open(os.path.join(var, "config.json"), "w") as f:
+    json.dump(cfg, f)
+os.chmod(os.path.join(var, "config.json"), 0o600)
+EOF
+fi
+exit 0

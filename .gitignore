@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+
+# 本地构建备份(保留带版本号的正式 fpk)
+*.bak
+*.bak-*

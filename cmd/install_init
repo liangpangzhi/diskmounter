@@ -1,0 +1,11 @@
+#!/bin/bash
+# 安装前检查
+MISSING=""
+for t in mdadm lvs vgs pvs mountpoint umount; do
+    command -v "$t" >/dev/null 2>&1 || MISSING="$MISSING $t"
+done
+if [ -n "$MISSING" ]; then
+    echo "缺少系统工具:$MISSING，无法安装" > "${TRIM_TEMP_LOGFILE}"
+    exit 1
+fi
+exit 0
